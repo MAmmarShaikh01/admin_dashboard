@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { client } from "@/sanity/lib/client";
-import { useRouter } from "next/navigation";
 
 // The Product interface (used for fetched data) includes the computed image URL.
 interface Product {
@@ -44,10 +43,9 @@ interface SanityProduct {
 }
 
 const AdminProductsPage: React.FC = () => {
-  const router = useRouter();
+  // Removed unused router and error variables.
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   // formState now uses the ProductInput type
@@ -88,7 +86,7 @@ const AdminProductsPage: React.FC = () => {
       setProducts(mappedData);
     } catch (err) {
       console.error(err);
-      setError("Failed to fetch products");
+      // Removed error state update.
     }
     setLoading(false);
   };
@@ -102,7 +100,7 @@ const AdminProductsPage: React.FC = () => {
     if (confirm("Are you sure you want to delete this product?")) {
       try {
         await client.delete(id);
-        // Refresh the list from the backend
+        // Refresh the list from the backend (or update local state):
         fetchProducts();
       } catch (err) {
         console.error(err);
@@ -216,10 +214,7 @@ const AdminProductsPage: React.FC = () => {
     }));
   };
 
-  // Handle image file upload:
-  // • Upload the image to Sanity.
-  // • In formState, only store the asset reference (_ref).
-  // • Store the returned URL in imagePreview for displaying in the UI.
+  // Handle image file upload.
   const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -253,12 +248,11 @@ const AdminProductsPage: React.FC = () => {
               onClick={() => {
                 setShowAddForm(true);
                 setEditingProduct(null);
-                setFormState({ category: "Chair" }); // initialize with default category
+                setFormState({ category: "Chair" });
                 setImagePreview("");
               }}
               className="flex items-center bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition"
             >
-              {/* Plus Icon */}
               <svg
                 className="w-5 h-5 mr-2"
                 fill="none"
@@ -417,175 +411,175 @@ const AdminProductsPage: React.FC = () => {
           </form>
         )}
 
+        {/* Edit Product Form */}
+        {editingProduct && (
+          <form
+            onSubmit={handleUpdate}
+            className="mb-8 bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Product Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {imagePreview && (
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="mt-3 w-full h-64 object-cover rounded-md border"
+                  />
+                )}
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Product Name"
+                    value={formState.name || ""}
+                    onChange={handleFormChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Price</label>
+                  <input
+                    type="text"
+                    name="price"
+                    placeholder="Product Price"
+                    value={formState.price || ""}
+                    onChange={handleFormChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    name="description"
+                    placeholder="Product Description"
+                    value={formState.description || ""}
+                    onChange={handleFormChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Discount Percentage</label>
+                  <input
+                    type="number"
+                    name="discountPercentage"
+                    placeholder="Discount Percentage"
+                    value={formState.discountPercentage || 0}
+                    onChange={handleFormChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="isFeaturedProduct"
+                    checked={formState.isFeaturedProduct || false}
+                    onChange={handleFormChange}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-700">Featured Product</label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Stock Level</label>
+                  <input
+                    type="number"
+                    name="stockLevel"
+                    placeholder="Stock Level"
+                    value={formState.stockLevel || 0}
+                    onChange={handleFormChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    required
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Category</label>
+                  <select
+                    name="category"
+                    value={formState.category || "Chair"}
+                    onChange={handleFormChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                    required
+                  >
+                    <option value="Chair">Chair</option>
+                    <option value="Sofa">Sofa</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                type="submit"
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* Products List */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {loading ? (
             <div className="text-center text-gray-700">Loading...</div>
           ) : (
-            products.map((product) =>
-              editingProduct && editingProduct._id === product._id ? (
-                <form
-                  key={product._id}
-                  onSubmit={handleUpdate}
-                  className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Product Image</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      {imagePreview && (
-                        <img
-                          src={imagePreview}
-                          alt="Preview"
-                          className="mt-3 w-full h-64 object-cover rounded-md border"
-                        />
-                      )}
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
-                        <input
-                          type="text"
-                          name="name"
-                          placeholder="Product Name"
-                          value={formState.name || ""}
-                          onChange={handleFormChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Price</label>
-                        <input
-                          type="text"
-                          name="price"
-                          placeholder="Product Price"
-                          value={formState.price || ""}
-                          onChange={handleFormChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Description</label>
-                        <textarea
-                          name="description"
-                          placeholder="Product Description"
-                          value={formState.description || ""}
-                          onChange={handleFormChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Discount Percentage</label>
-                        <input
-                          type="number"
-                          name="discountPercentage"
-                          placeholder="Discount Percentage"
-                          value={formState.discountPercentage || 0}
-                          onChange={handleFormChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                          min="0"
-                          max="100"
-                        />
-                      </div>
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          name="isFeaturedProduct"
-                          checked={formState.isFeaturedProduct || false}
-                          onChange={handleFormChange}
-                          className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                        />
-                        <label className="ml-2 block text-sm text-gray-700">Featured Product</label>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Stock Level</label>
-                        <input
-                          type="number"
-                          name="stockLevel"
-                          placeholder="Stock Level"
-                          value={formState.stockLevel || 0}
-                          onChange={handleFormChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                          required
-                          min="0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Category</label>
-                        <select
-                          name="category"
-                          value={formState.category || "Chair"}
-                          onChange={handleFormChange}
-                          className="mt-1 block w-full rounded-md border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                          required
-                        >
-                          <option value="Chair">Chair</option>
-                          <option value="Sofa">Sofa</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-end space-x-4 mt-6">
-                    <button
-                      type="submit"
-                      className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelEdit}
-                      className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div
-                  key={product._id}
-                  className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl cursor-pointer"
-                  onClick={() => handleEditClick(product)}
-                >
-                  <img
-                    src={product.image?.asset?.url || "/placeholder.png"}
-                    alt={product.name}
-                    className="w-full h-64 object-cover rounded-md mb-4"
-                  />
-                  <h2 className="text-xl font-bold text-blue-700">{product.name}</h2>
-                  <p className="text-gray-700">Price: {product.price}</p>
-                  <p className="text-gray-700">Category: {product.category}</p>
-                  <p className="text-gray-700">Stock: {product.stockLevel}</p>
-                  <div className="flex space-x-2 mt-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditClick(product);
-                      }}
-                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(product._id);
-                      }}
-                      className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition"
-                    >
-                      Delete
-                    </button>
-                  </div>
+            products.map((product) => (
+              <div
+                key={product._id}
+                className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl cursor-pointer"
+                onClick={() => handleEditClick(product)}
+              >
+                <img
+                  src={product.image?.asset?.url || "/placeholder.png"}
+                  alt={product.name}
+                  className="w-full h-64 object-cover rounded-md mb-4"
+                />
+                <h2 className="text-xl font-bold text-blue-700">{product.name}</h2>
+                <p className="text-gray-700">Price: {product.price}</p>
+                <p className="text-gray-700">Category: {product.category}</p>
+                <p className="text-gray-700">Stock: {product.stockLevel}</p>
+                <div className="flex space-x-2 mt-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditClick(product);
+                    }}
+                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(product._id);
+                    }}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition"
+                  >
+                    Delete
+                  </button>
                 </div>
-              )
-            )
+              </div>
+            ))
           )}
         </div>
       </div>

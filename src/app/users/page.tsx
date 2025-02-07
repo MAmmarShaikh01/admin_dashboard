@@ -176,6 +176,7 @@ const AdminUsersPage: React.FC = () => {
     try {
       // Remove _id from formState using a renaming pattern.
       const { _id: _unused, ...userData } = formState;
+      console.log(_unused)
       const newUserData: NewUserDocument = {
         _type: "user",
         name: userData.name!,
