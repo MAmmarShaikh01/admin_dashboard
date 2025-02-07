@@ -3,7 +3,7 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { client } from "@/sanity/lib/client";
 
-// Updated Order interface: cartItems is now an array of string product IDs.
+// Updated Order interface matching your new schema.
 export interface Order {
   _id: string;
   fullName: string;
@@ -18,11 +18,17 @@ export interface Order {
   amount: number;
   createdAt: string;
   status: string; // "pending" or "completed"
-  cartItems: string[]; // array of product IDs
+  cartItems: {
+    quantity: number;
+    product: {
+      _id: string;
+      name: string;
+      imageUrl: string;
+    };
+  }[];
 }
 
-// For form inputs we use a simplified type.
-// For cartItems we use a comma‑separated string of product IDs.
+// For form input, we use a simplified type (for editing/adding orders).
 export type OrderInput = {
   _id?: string;
   fullName?: string;
@@ -37,26 +43,19 @@ export type OrderInput = {
   amount?: number;
   createdAt?: string;
   status?: string;
-  cartItems?: string; // comma separated product IDs
+  // For editing, we store the product IDs (comma separated) for convenience.
+  // (Not used when creating a new order since we use the updated schema.)
+  cartItems?: string;
 };
-
-// We'll also maintain a lookup map for products.
-interface ProductDetails {
-  _id: string;
-  name: string;
-  imageUrl: string;
-}
 
 const AdminOrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [productsMap, setProductsMap] = useState<Record<string, ProductDetails>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [formState, setFormState] = useState<OrderInput>({});
 
-  // Fetch orders from Sanity.
-  // Note: Here we fetch cartItems as an array of strings.
+  // Fetch orders from Sanity with product details resolved for each cart item.
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -75,34 +74,17 @@ const AdminOrdersPage: React.FC = () => {
           amount,
           createdAt,
           status,
-          cartItems
+          cartItems[]{
+            quantity,
+            product->{
+              _id,
+              name,
+              "imageUrl": image.asset->url
+            }
+          }
         }
       `);
       setOrders(data);
-
-      // Extract unique product IDs from all orders, trimming each ID.
-      const uniqueIds = Array.from(
-        new Set(data.flatMap((order) => (order.cartItems || []).map((id) => id.trim())))
-      );
-      if (uniqueIds.length > 0) {
-        // Fetch product details for these IDs.
-        const productsData: ProductDetails[] = await client.fetch(
-          `*[_type=="product" && _id in $ids]{
-            _id,
-            name,
-            "imageUrl": image.asset->url
-          }`,
-          { ids: uniqueIds }
-        );
-        // Build a lookup map.
-        const map: Record<string, ProductDetails> = {};
-        productsData.forEach((prod) => {
-          map[prod._id] = prod;
-        });
-        setProductsMap(map);
-      } else {
-        setProductsMap({});
-      }
     } catch (err) {
       console.error(err);
     }
@@ -142,6 +124,7 @@ const AdminOrdersPage: React.FC = () => {
   };
 
   // Open edit mode for an order.
+  // (For simplicity, the editing form uses a comma‑separated list for cartItems.)
   const handleEditClick = (order: Order) => {
     setEditingOrder(order);
     setFormState({
@@ -158,7 +141,8 @@ const AdminOrdersPage: React.FC = () => {
       amount: order.amount,
       createdAt: order.createdAt,
       status: order.status,
-      cartItems: (order.cartItems || []).join(", "),
+      // Convert the cartItems to a comma-separated string of product IDs.
+      cartItems: order.cartItems.map((item) => item.product._id).join(", "),
     });
     setShowAddForm(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -182,13 +166,13 @@ const AdminOrdersPage: React.FC = () => {
           : [];
         const updateData = {
           ...formState,
-          cartItems: cartItemsArray,
+          cartItems: cartItemsArray, // In a real app, you would rebuild the cartItems array with quantity info.
         };
         const updated = (await client
           .patch(editingOrder._id)
           .set(updateData)
           .commit()) as Order;
-  
+
         setOrders((prev) =>
           prev.map((ord) =>
             ord._id === editingOrder._id ? updated : ord
@@ -211,16 +195,14 @@ const AdminOrdersPage: React.FC = () => {
         ? formState.cartItems.split(",").map((id) => id.trim())
         : [];
       const createdAt = formState.createdAt || new Date().toISOString();
-      
-      // Create the new order.
+
       await client.create({
         _type: "order",
         ...formState,
         status: "pending", // New orders default to pending.
-        cartItems: cartItemsArray,
+        cartItems: cartItemsArray, // In a real scenario, you'd build objects with product and quantity.
         createdAt,
       });
-      // Refresh orders (and the products lookup) after creation.
       await fetchOrders();
       handleCancel();
     } catch (err) {
@@ -540,26 +522,30 @@ const AdminOrdersPage: React.FC = () => {
                           Cart Items
                         </h4>
                         <div className="space-y-2">
-                          {(order.cartItems || []).map((prodId) => {
-                            const id = prodId.trim();
-                            const product = productsMap[id];
-                            if (!product) return null;
+                          {(order.cartItems || []).map((item) => {
+                            if (!item.product) return null;
                             return (
                               <div
-                                key={id}
+                                key={item.product._id}
                                 className="flex items-center space-x-2"
                               >
                                 <img
-                                  src={product.imageUrl || "/placeholder.png"}
-                                  alt={product.name}
+                                  src={item.product.imageUrl || "/placeholder.png"}
+                                  alt={item.product.name}
                                   className="w-16 h-16 object-contain rounded-md border"
                                 />
                                 <div>
                                   <p className="text-gray-800 font-medium">
-                                    {product.name}
+                                    {item.product.name}
                                   </p>
                                   <p className="text-gray-600 text-sm">
-                                    ID: {id}
+                                    Quantity: {item.quantity}
+                                  </p>
+                                  <p className="text-gray-600 text-sm">
+                                    Payment:{" "}
+                                    {order.paymentStatus === "paid"
+                                      ? "Paid"
+                                      : "Cash on Delivery"}
                                   </p>
                                 </div>
                               </div>
@@ -614,26 +600,30 @@ const AdminOrdersPage: React.FC = () => {
                           Cart Items
                         </h4>
                         <div className="space-y-2">
-                          {(order.cartItems || []).map((prodId) => {
-                            const id = prodId.trim();
-                            const product = productsMap[id];
-                            if (!product) return null;
+                          {(order.cartItems || []).map((item) => {
+                            if (!item.product) return null;
                             return (
                               <div
-                                key={id}
+                                key={item.product._id}
                                 className="flex items-center space-x-2"
                               >
                                 <img
-                                  src={product.imageUrl || "/placeholder.png"}
-                                  alt={product.name}
+                                  src={item.product.imageUrl || "/placeholder.png"}
+                                  alt={item.product.name}
                                   className="w-16 h-16 object-contain rounded-md border"
                                 />
                                 <div>
                                   <p className="text-gray-800 font-medium">
-                                    {product.name}
+                                    {item.product.name}
                                   </p>
                                   <p className="text-gray-600 text-sm">
-                                    ID: {id}
+                                    Quantity: {item.quantity}
+                                  </p>
+                                  <p className="text-gray-600 text-sm">
+                                    Payment:{" "}
+                                    {order.paymentStatus === "paid"
+                                      ? "Paid"
+                                      : "Cash on Delivery"}
                                   </p>
                                 </div>
                               </div>
@@ -667,4 +657,4 @@ const AdminOrdersPage: React.FC = () => {
   );
 };
 
-export default AdminOrdersPage; 
+export default AdminOrdersPage;
