@@ -17,11 +17,10 @@ const AdminMessagesPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
 
-  // Fetch messages from Sanity with pinned messages on top and always fetch fresh data.
+  // Fetch messages from Sanity and force a fresh fetch by including a dummy parameter.
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      // You can force a fresh fetch by adding a dummy parameter (timestamp) if needed.
       const data = await client.fetch<Message[]>(`
         *[_type=="message"] | order(pinned desc, createdAt desc){
           _id,
@@ -71,10 +70,14 @@ const AdminMessagesPage: React.FC = () => {
     }
   };
 
-  // Helper function to truncate text to 20 characters.
+  // Helper to truncate text to a certain number of characters.
   const truncateText = (text: string, limit: number = 20): string => {
     return text.length > limit ? text.slice(0, limit) + "..." : text;
   };
+
+  // Separate messages into pinned and unpinned.
+  const pinnedMessages = messages.filter((msg) => msg.pinned);
+  const unpinnedMessages = messages.filter((msg) => !msg.pinned);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -114,55 +117,113 @@ const AdminMessagesPage: React.FC = () => {
             Refresh
           </button>
         </header>
+
         {loading ? (
           <div className="text-center text-gray-700">Loading...</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {messages.map((msg) => (
-              <div
-                key={msg._id}
-                className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition transform hover:scale-105 hover:shadow-2xl cursor-pointer"
-                onClick={() => setSelectedMessage(msg)}
-              >
-                <div className="mb-4">
-                  <h2 className="text-2xl font-bold text-blue-700">{msg.name}</h2>
-                  <p className="text-gray-700 text-sm">
-                    <span className="font-semibold">Email:</span> {msg.email}
-                  </p>
-                  <p className="text-gray-700 text-sm">
-                    <span className="font-semibold">Date:</span> {new Date(msg.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                <p className="text-gray-800 mb-4 whitespace-normal break-words">
-                  {truncateText(msg.message, 20)}
-                </p>
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      togglePin(msg._id, msg.pinned);
-                    }}
-                    className={`px-4 py-2 rounded-md transition ${
-                      msg.pinned
-                        ? "bg-yellow-500 text-white hover:bg-yellow-600"
-                        : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-                    }`}
-                  >
-                    {msg.pinned ? "Unpin" : "Pin"}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(msg._id);
-                    }}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition"
-                  >
-                    Delete
-                  </button>
+          <>
+            {pinnedMessages.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-blue-800 mb-4">Pinned Messages</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {pinnedMessages.map((msg) => (
+                    <div
+                      key={msg._id}
+                      className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition transform hover:scale-105 hover:shadow-2xl cursor-pointer"
+                      onClick={() => setSelectedMessage(msg)}
+                    >
+                      <div className="mb-4">
+                        <h2 className="text-2xl font-bold text-blue-700">{msg.name}</h2>
+                        <p className="text-gray-700 text-sm">
+                          <span className="font-semibold">Email:</span> {msg.email}
+                        </p>
+                        <p className="text-gray-700 text-sm">
+                          <span className="font-semibold">Date:</span> {new Date(msg.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <p className="text-gray-800 mb-4 whitespace-normal break-words">
+                        {truncateText(msg.message, 20)}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePin(msg._id, msg.pinned);
+                          }}
+                          className="px-4 py-2 rounded-md transition bg-yellow-500 text-white hover:bg-yellow-600"
+                        >
+                          Unpin
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(msg._id);
+                          }}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-blue-800 mb-4">Other Messages</h2>
+              {unpinnedMessages.length === 0 ? (
+                <p className="text-gray-700">No messages.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {unpinnedMessages.map((msg) => (
+                    <div
+                      key={msg._id}
+                      className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition transform hover:scale-105 hover:shadow-2xl cursor-pointer"
+                      onClick={() => setSelectedMessage(msg)}
+                    >
+                      <div className="mb-4">
+                        <h2 className="text-2xl font-bold text-blue-700">{msg.name}</h2>
+                        <p className="text-gray-700 text-sm">
+                          <span className="font-semibold">Email:</span> {msg.email}
+                        </p>
+                        <p className="text-gray-700 text-sm">
+                          <span className="font-semibold">Date:</span> {new Date(msg.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <p className="text-gray-800 mb-4 whitespace-normal break-words">
+                        {truncateText(msg.message, 20)}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePin(msg._id, msg.pinned);
+                          }}
+                          className={`px-4 py-2 rounded-md transition ${
+                            msg.pinned
+                              ? "bg-yellow-500 text-white hover:bg-yellow-600"
+                              : "bg-gray-300 text-gray-800 hover:bg-gray-400"
+                          }`}
+                        >
+                          {msg.pinned ? "Pin (Unpin)" : "Pin"}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(msg._id);
+                          }}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
