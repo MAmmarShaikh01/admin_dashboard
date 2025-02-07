@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { client } from "@/sanity/lib/client";
-import { useRouter } from "next/navigation";
 
 // The User interface matches your Sanity schema.
 export interface User {
@@ -40,7 +39,7 @@ export type UserInput = {
   role?: string;
 };
 
-// When creating a new document, we do not supply _id. Define a type for that.
+// When creating a new document, _id is not provided. We define a type for that.
 export type NewUserDocument = Omit<User, "_id"> & {
   _type: "user";
 };
@@ -65,10 +64,8 @@ interface SanityUser {
 }
 
 const AdminUsersPage: React.FC = () => {
-  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [formState, setFormState] = useState<UserInput>({});
@@ -104,7 +101,6 @@ const AdminUsersPage: React.FC = () => {
       setUsers(mappedData);
     } catch (err) {
       console.error(err);
-      setError("Failed to fetch users");
     }
     setLoading(false);
   };
@@ -163,7 +159,7 @@ const AdminUsersPage: React.FC = () => {
   // Create a new user.
   const handleAddNew = async (e: FormEvent) => {
     e.preventDefault();
-    // Validate that required fields are provided.
+    // Validate required fields.
     if (
       !formState.name ||
       !formState.email ||
@@ -179,8 +175,8 @@ const AdminUsersPage: React.FC = () => {
       return;
     }
     try {
-      // Destructure _id out (if any) so we don't pass it.
-      const { _id, ...userData } = formState;
+      // Remove _id from formState using the pattern _id: _ to ignore it.
+      const { _id: _, ...userData } = formState;
       const newUserData: NewUserDocument = {
         _type: "user",
         name: userData.name!,
@@ -207,8 +203,8 @@ const AdminUsersPage: React.FC = () => {
     }
   };
 
-  // Handle form field changes.
-  // For address fields, the input name should be "address.fieldName".
+  // Handle changes for form inputs.
+  // For address fields, use names like "address.street", "address.city", etc.
   const handleFormChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -291,220 +287,6 @@ const AdminUsersPage: React.FC = () => {
             <h2 className="text-2xl font-bold text-blue-600 mb-6">
               Add New User
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Column – Basic Information */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Name"
-                    value={formState.name || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="Email"
-                    value={formState.email || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Mobile Number
-                  </label>
-                  <input
-                    type="text"
-                    name="mobileNumber"
-                    placeholder="Mobile Number"
-                    value={formState.mobileNumber || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      name="password"
-                      placeholder="Password"
-                      value={formState.password || ""}
-                      onChange={handleFormChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 pr-10 focus:border-blue-500 focus:ring-blue-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-600"
-                    >
-                      {showPassword ? (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path d="M4.03 3.97a.75.75 0 011.06 0l11 11a.75.75 0 11-1.06 1.06l-11-11a.75.75 0 010-1.06z" />
-                        </svg>
-                      ) : (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path d="M2.94 10a8.94 8.94 0 011.18-3.592l1.54 1.54A7.44 7.44 0 003.5 10a7.44 7.44 0 001.12 3.053l-1.54 1.54A8.94 8.94 0 012.94 10zM10 15a3.5 3.5 0 003.376-2.586l1.17 1.17A5 5 0 0110 17a5 5 0 01-4.546-2.916l1.17-1.17A3.5 3.5 0 0010 15z" />
-                          <path d="M10 5a5 5 0 014.546 2.916l-1.17 1.17A3.5 3.5 0 0010 6.5a3.5 3.5 0 00-3.376 2.586l-1.17-1.17A5 5 0 0110 5z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isVerified"
-                    checked={formState.isVerified || false}
-                    onChange={handleFormChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Is Verified
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Role
-                  </label>
-                  <select
-                    name="role"
-                    value={formState.role || "user"}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 bg-white py-2 px-3 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-              </div>
-              {/* Right Column – Address Information */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Street
-                  </label>
-                  <input
-                    type="text"
-                    name="address.street"
-                    placeholder="Street"
-                    value={formState.address?.street || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    name="address.city"
-                    placeholder="City"
-                    value={formState.address?.city || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    State
-                  </label>
-                  <input
-                    type="text"
-                    name="address.state"
-                    placeholder="State"
-                    value={formState.address?.state || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Country
-                  </label>
-                  <input
-                    type="text"
-                    name="address.country"
-                    placeholder="Country"
-                    value={formState.address?.country || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Postal Code
-                  </label>
-                  <input
-                    type="text"
-                    name="address.postalCode"
-                    placeholder="Postal Code"
-                    value={formState.address?.postalCode || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-4 mt-6">
-              <button
-                type="submit"
-                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"
-              >
-                Create
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Edit User Form */}
-        {editingUser && (
-          <form
-            onSubmit={handleUpdate}
-            className="mb-8 bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
-          >
-            <h2 className="text-2xl font-bold text-blue-600 mb-6">Edit User</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left Column – Basic Information */}
               <div className="space-y-4">
