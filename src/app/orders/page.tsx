@@ -3,7 +3,7 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { client } from "@/sanity/lib/client";
 
-// Order interface matching your Sanity schema.
+// Updated Order interface reflecting the new schema.
 export interface Order {
   _id: string;
   fullName: string;
@@ -17,11 +17,15 @@ export interface Order {
   paymentStatus: string;
   amount: number;
   createdAt: string;
-  cartItems: string[];
+  status: string; // "pending" or "completed"
+  cartItems: {
+    _id: string;
+    name: string;
+    imageUrl: string;
+  }[];
 }
 
-// For form inputs we use a simplified type.
-// For cartItems, the form will handle a comma‑separated string.
+// For form inputs we use a simplified type. (For simplicity, cartItems are a comma‑separated string of product IDs.)
 export type OrderInput = {
   _id?: string;
   fullName?: string;
@@ -35,7 +39,8 @@ export type OrderInput = {
   paymentStatus?: string;
   amount?: number;
   createdAt?: string;
-  cartItems?: string; // comma‑separated items
+  status?: string;
+  cartItems?: string; // comma separated product IDs
 };
 
 const AdminOrdersPage: React.FC = () => {
@@ -45,7 +50,7 @@ const AdminOrdersPage: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [formState, setFormState] = useState<OrderInput>({});
 
-  // Fetch orders from Sanity.
+  // Fetch orders from Sanity including resolved product data for cartItems.
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -63,7 +68,12 @@ const AdminOrdersPage: React.FC = () => {
           paymentStatus,
           amount,
           createdAt,
-          cartItems
+          status,
+          cartItems[]->{
+            _id,
+            name,
+            "imageUrl": image.asset->url
+          }
         }
       `);
       setOrders(data);
@@ -77,12 +87,27 @@ const AdminOrdersPage: React.FC = () => {
     fetchOrders();
   }, []);
 
-  // Delete an order.
-  const handleDelete = async (id: string) => {
+  // Mark an order as completed.
+  const handleComplete = async (orderId: string) => {
+    try {
+      await client.patch(orderId).set({ status: "completed" }).commit();
+      setOrders((prev) =>
+        prev.map((order) =>
+          order._id === orderId ? { ...order, status: "completed" } : order
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Failed to mark order as completed");
+    }
+  };
+
+  // (Optional) Delete an order from the system.
+  const handleDelete = async (orderId: string) => {
     if (confirm("Are you sure you want to delete this order?")) {
       try {
-        await client.delete(id);
-        setOrders((prev) => prev.filter((order) => order._id !== id));
+        await client.delete(orderId);
+        setOrders((prev) => prev.filter((order) => order._id !== orderId));
       } catch (err) {
         console.error(err);
         alert("Failed to delete order");
@@ -106,13 +131,14 @@ const AdminOrdersPage: React.FC = () => {
       paymentStatus: order.paymentStatus,
       amount: order.amount,
       createdAt: order.createdAt,
-      cartItems: order.cartItems.join(", "),
+      status: order.status,
+      cartItems: order.cartItems.map((item) => item._id).join(", "),
     });
     setShowAddForm(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Cancel adding or editing.
+  // Cancel editing/adding.
   const handleCancel = () => {
     setEditingOrder(null);
     setShowAddForm(false);
@@ -124,32 +150,24 @@ const AdminOrdersPage: React.FC = () => {
     e.preventDefault();
     if (editingOrder && editingOrder._id) {
       try {
-        // Convert cartItems to an array.
+        // Convert the cartItems string to an array of product IDs.
         const cartItemsArray = formState.cartItems
-          ? formState.cartItems.split(",").map((item) => item.trim())
+          ? formState.cartItems.split(",").map((id) => id.trim())
           : [];
         const updateData = {
           ...formState,
           cartItems: cartItemsArray,
         };
-        const updated = await client.patch(editingOrder._id).set(updateData).commit();
-        const updatedOrder: Order = {
-          _id: updated._id,
-          fullName: updated.fullName,
-          email: updated.email,
-          phone: updated.phone,
-          address: updated.address,
-          city: updated.city,
-          postalCode: updated.postalCode,
-          country: updated.country,
-          paymentMethod: updated.paymentMethod,
-          paymentStatus: updated.paymentStatus,
-          amount: updated.amount,
-          createdAt: updated.createdAt,
-          cartItems: updated.cartItems,
-        };
+        // Cast the result of commit() to Order.
+        const updated = (await client
+          .patch(editingOrder._id)
+          .set(updateData)
+          .commit()) as Order;
+  
         setOrders((prev) =>
-          prev.map((ord) => (ord._id === editingOrder._id ? updatedOrder : ord))
+          prev.map((ord) =>
+            ord._id === editingOrder._id ? updated : ord
+          )
         );
         handleCancel();
       } catch (err) {
@@ -158,47 +176,45 @@ const AdminOrdersPage: React.FC = () => {
       }
     }
   };
+  
 
   // Create a new order.
   const handleAddNew = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      // Convert cartItems to an array.
+      // Convert the cartItems string into an array of product reference objects.
       const cartItemsArray = formState.cartItems
-        ? formState.cartItems.split(",").map((item) => item.trim())
+        ? formState.cartItems.split(",").map((id) => id.trim())
         : [];
-      // If createdAt is not set, use current date/time.
+      const references = cartItemsArray.map((id) => ({
+        _type: "reference",
+        _ref: id,
+      }));
+      
+      // Use current time if createdAt is not provided.
       const createdAt = formState.createdAt || new Date().toISOString();
-      const newOrder = await client.create({
+      
+      // Create the new order with the proper cartItems array.
+      await client.create({
         _type: "order",
         ...formState,
-        cartItems: cartItemsArray,
+        status: "pending", // New orders default to pending.
+        cartItems: references,
         createdAt,
       });
-      const addedOrder: Order = {
-        _id: newOrder._id,
-        fullName: newOrder.fullName!,
-        email: newOrder.email!,
-        phone: newOrder.phone!,
-        address: newOrder.address!,
-        city: newOrder.city!,
-        postalCode: newOrder.postalCode!,
-        country: newOrder.country!,
-        paymentMethod: newOrder.paymentMethod!,
-        paymentStatus: newOrder.paymentStatus!,
-        amount: newOrder.amount!,
-        createdAt: newOrder.createdAt,
-        cartItems: newOrder.cartItems,
-      };
-      setOrders((prev) => [...prev, addedOrder]);
+      
+      // Refresh the orders list so that the newly created order shows the resolved product details.
+      await fetchOrders();
       handleCancel();
     } catch (err) {
       console.error(err);
       alert("Failed to create order");
     }
   };
+  
+  
 
-  // Handle form changes.
+  // Handle form input changes.
   const handleFormChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -215,6 +231,10 @@ const AdminOrdersPage: React.FC = () => {
 
   const isEditing = Boolean(editingOrder);
   const isFormOpen = isEditing || showAddForm;
+
+  // Separate orders into pending and completed.
+  const pendingOrders = orders.filter((order) => order.status === "pending");
+  const completedOrders = orders.filter((order) => order.status === "completed");
 
   return (
     <div className="min-h-screen bg-gray-50 py-6">
@@ -241,7 +261,12 @@ const AdminOrdersPage: React.FC = () => {
                 viewBox="0 0 24 24"
                 xmlns="http://www.w3.org/2000/svg"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
               </svg>
               Add New Order
             </button>
@@ -267,7 +292,9 @@ const AdminOrdersPage: React.FC = () => {
               {/* Left Column */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Full Name
+                  </label>
                   <input
                     type="text"
                     name="fullName"
@@ -279,7 +306,9 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Email
+                  </label>
                   <input
                     type="email"
                     name="email"
@@ -291,7 +320,9 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Phone
+                  </label>
                   <input
                     type="text"
                     name="phone"
@@ -303,7 +334,9 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Address
+                  </label>
                   <input
                     type="text"
                     name="address"
@@ -315,7 +348,9 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">City</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    City
+                  </label>
                   <input
                     type="text"
                     name="city"
@@ -327,7 +362,9 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Postal Code</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Postal Code
+                  </label>
                   <input
                     type="text"
                     name="postalCode"
@@ -342,7 +379,9 @@ const AdminOrdersPage: React.FC = () => {
               {/* Right Column */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Country</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Country
+                  </label>
                   <input
                     type="text"
                     name="country"
@@ -354,7 +393,9 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Payment Method</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Payment Method
+                  </label>
                   <select
                     name="paymentMethod"
                     value={formState.paymentMethod || "creditCard"}
@@ -367,7 +408,9 @@ const AdminOrdersPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Payment Status</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Payment Status
+                  </label>
                   <select
                     name="paymentStatus"
                     value={formState.paymentStatus || "paid"}
@@ -380,7 +423,9 @@ const AdminOrdersPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Amount</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Amount
+                  </label>
                   <input
                     type="number"
                     name="amount"
@@ -393,22 +438,30 @@ const AdminOrdersPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Created At</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Created At
+                  </label>
                   <input
                     type="datetime-local"
                     name="createdAt"
-                    value={formState.createdAt ? formState.createdAt.substring(0, 16) : ""}
+                    value={
+                      formState.createdAt
+                        ? formState.createdAt.substring(0, 16)
+                        : ""
+                    }
                     onChange={handleFormChange}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Cart Items (comma separated)</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Cart Items (comma separated product IDs)
+                  </label>
                   <input
                     type="text"
                     name="cartItems"
-                    placeholder="Item1, Item2, Item3"
+                    placeholder="id1, id2, id3"
                     value={formState.cartItems || ""}
                     onChange={handleFormChange}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -434,51 +487,147 @@ const AdminOrdersPage: React.FC = () => {
           </form>
         )}
 
-        {/* Orders List */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loading ? (
-            <div className="text-center text-gray-700">Loading...</div>
-          ) : (
-            orders.map((order) => (
-              <div
-                key={order._id}
-                className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl cursor-pointer"
-                onClick={() => handleEditClick(order)}
-              >
-                <div className="mb-4">
-                  <h2 className="text-xl font-bold text-blue-700">{order.fullName}</h2>
-                  <p className="text-gray-700">Email: {order.email}</p>
-                  <p className="text-gray-700">Phone: {order.phone}</p>
-                  <p className="text-gray-700">City: {order.city}</p>
-                  <p className="text-gray-700">Amount: ${order.amount}</p>
-                  <p className="text-gray-700">
-                    Created At: {new Date(order.createdAt).toLocaleString()}
-                  </p>
+        {/* Orders Sections */}
+        {loading ? (
+          <div className="text-center text-gray-700">Loading...</div>
+        ) : (
+          <>
+            {/* Pending Orders Section */}
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-blue-800 mb-4">
+                Pending Orders
+              </h2>
+              {pendingOrders.length === 0 ? (
+                <p className="text-gray-700">No pending orders.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {pendingOrders.map((order) => (
+                    <div
+                      key={order._id}
+                      className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl cursor-pointer"
+                      onClick={() => handleEditClick(order)}
+                    >
+                      <div className="mb-4">
+                        <h3 className="text-xl font-bold text-blue-700">
+                          {order.fullName}
+                        </h3>
+                        <p className="text-gray-700">Email: {order.email}</p>
+                        <p className="text-gray-700">Phone: {order.phone}</p>
+                        <p className="text-gray-700">City: {order.city}</p>
+                        <p className="text-gray-700">Amount: ${order.amount}</p>
+                        <p className="text-gray-700">
+                          Created At:{" "}
+                          {new Date(order.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="mb-4">
+                        <h4 className="text-lg font-semibold text-gray-800">
+                          Cart Items
+                        </h4>
+                        <div className="space-y-2">
+                          {order.cartItems?.map((item) => (
+                            <div
+                              key={item._id}
+                              className="flex items-center space-x-2"
+                            >
+                              <img
+                                src={item.imageUrl || "/placeholder.png"}
+                                alt={item.name}
+                                className="w-16 h-16 object-contain rounded-md border"
+                              />
+                              <div>
+                                <p className="text-gray-800 font-medium">
+                                  {item.name}
+                                </p>
+                                <p className="text-gray-600 text-sm">
+                                  ID: {item._id}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleComplete(order._id);
+                        }}
+                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
+                      >
+                        Complete
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex space-x-2 mt-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditClick(order);
-                    }}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(order._id);
-                    }}
-                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition"
-                  >
-                    Delete
-                  </button>
+              )}
+            </div>
+
+            {/* Completed Orders Section */}
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-blue-800 mb-4">
+                Completed Orders
+              </h2>
+              {completedOrders.length === 0 ? (
+                <p className="text-gray-700">No completed orders.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {completedOrders.map((order) => (
+                    <div
+                      key={order._id}
+                      className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
+                    >
+                      <div className="mb-4">
+                        <h3 className="text-xl font-bold text-blue-700">
+                          {order.fullName}
+                        </h3>
+                        <p className="text-gray-700">Email: {order.email}</p>
+                        <p className="text-gray-700">Phone: {order.phone}</p>
+                        <p className="text-gray-700">City: {order.city}</p>
+                        <p className="text-gray-700">Amount: ${order.amount}</p>
+                        <p className="text-gray-700">
+                          Created At:{" "}
+                          {new Date(order.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="mb-4">
+                        <h4 className="text-lg font-semibold text-gray-800">
+                          Cart Items
+                        </h4>
+                        <div className="space-y-2">
+                          {order.cartItems?.map((item) => (
+                            <div
+                              key={item._id}
+                              className="flex items-center space-x-2"
+                            >
+                              <img
+                                src={item.imageUrl || "/placeholder.png"}
+                                alt={item.name}
+                                className="w-16 h-16 object-contain rounded-md border"
+                              />
+                              <div>
+                                <p className="text-gray-800 font-medium">
+                                  {item.name}
+                                </p>
+                                <p className="text-gray-600 text-sm">
+                                  ID: {item._id}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <span className="text-green-700 font-bold">
+                          Completed
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))
-          )}
-        </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
