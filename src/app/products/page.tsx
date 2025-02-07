@@ -43,17 +43,14 @@ interface SanityProduct {
 }
 
 const AdminProductsPage: React.FC = () => {
-  // Removed unused router and error variables.
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
-  // formState now uses the ProductInput type
   const [formState, setFormState] = useState<ProductInput>({});
-  // imagePreview holds the URL for showing the preview in the form
   const [imagePreview, setImagePreview] = useState<string>("");
 
-  // Fetch products from Sanity using a GROQ query that projects the image URL
+  // Fetch products from Sanity using a GROQ query that projects the image URL.
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -71,7 +68,6 @@ const AdminProductsPage: React.FC = () => {
         }
       `);
 
-      // Map the fetched data into our Product interface.
       const mappedData: Product[] = data.map((doc) => ({
         _id: doc._id,
         name: doc.name,
@@ -86,7 +82,6 @@ const AdminProductsPage: React.FC = () => {
       setProducts(mappedData);
     } catch (err) {
       console.error(err);
-      // Removed error state update.
     }
     setLoading(false);
   };
@@ -95,12 +90,11 @@ const AdminProductsPage: React.FC = () => {
     fetchProducts();
   }, []);
 
-  // Delete a product and re-fetch the list afterwards.
+  // Delete a product and refresh the list.
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this product?")) {
       try {
         await client.delete(id);
-        // Refresh the list from the backend (or update local state):
         fetchProducts();
       } catch (err) {
         console.error(err);
@@ -109,7 +103,7 @@ const AdminProductsPage: React.FC = () => {
     }
   };
 
-  // Open edit mode for a product
+  // Open edit mode for a product.
   const handleEditClick = (product: Product) => {
     setEditingProduct(product);
     setFormState({
@@ -124,15 +118,18 @@ const AdminProductsPage: React.FC = () => {
     });
     setImagePreview(product.image?.asset?.url || "");
     setShowAddForm(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleCancelEdit = () => {
+  // Cancel and reset form state.
+  const handleCancel = () => {
     setEditingProduct(null);
+    setShowAddForm(false);
     setFormState({});
     setImagePreview("");
   };
 
-  // Update a product
+  // Update an existing product.
   const handleUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (editingProduct && editingProduct._id) {
@@ -157,9 +154,7 @@ const AdminProductsPage: React.FC = () => {
             prod._id === editingProduct._id ? updatedProduct : prod
           )
         );
-        setEditingProduct(null);
-        setFormState({});
-        setImagePreview("");
+        handleCancel();
       } catch (err) {
         console.error(err);
         alert("Failed to update product");
@@ -167,14 +162,14 @@ const AdminProductsPage: React.FC = () => {
     }
   };
 
-  // Create a new product and update the list immediately.
+  // Create a new product.
   const handleAddNew = async (e: FormEvent) => {
     e.preventDefault();
     try {
       const newProduct = await client.create({
         _type: "product",
         ...formState,
-        // Ensure that category is always set (default to "Chair" if not provided)
+        // Default category to "Chair" if not provided.
         category: formState.category || "Chair",
       });
       const mappedNewProduct: Product = {
@@ -188,18 +183,15 @@ const AdminProductsPage: React.FC = () => {
         stockLevel: newProduct.stockLevel!,
         category: newProduct.category!,
       };
-      // Append the new product to the existing list.
       setProducts((prev) => [...prev, mappedNewProduct]);
-      setShowAddForm(false);
-      setFormState({});
-      setImagePreview("");
+      handleCancel();
     } catch (err) {
       console.error(err);
       alert("Failed to create product");
     }
   };
 
-  // Handle changes for text, number, checkbox, and select inputs
+  // Handle form input changes.
   const handleFormChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -235,6 +227,11 @@ const AdminProductsPage: React.FC = () => {
     }
   };
 
+  // Determine if we are in edit mode.
+  const isEditing = Boolean(editingProduct);
+  // The form is open if we are either adding a new product or editing one.
+  const isFormOpen = isEditing || showAddForm;
+
   return (
     <div className="min-h-screen bg-gray-50 py-6">
       <div className="container mx-auto px-4">
@@ -250,6 +247,7 @@ const AdminProductsPage: React.FC = () => {
                 setEditingProduct(null);
                 setFormState({ category: "Chair" });
                 setImagePreview("");
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className="flex items-center bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition"
             >
@@ -278,17 +276,21 @@ const AdminProductsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Add New Product Form */}
-        {showAddForm && (
+        {/* Add / Edit Product Form */}
+        {isFormOpen && (
           <form
-            onSubmit={handleAddNew}
+            onSubmit={isEditing ? handleUpdate : handleAddNew}
             className="mb-8 bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
           >
-            <h2 className="text-2xl font-bold text-blue-600 mb-6">Add New Product</h2>
+            <h2 className="text-2xl font-bold text-blue-600 mb-6">
+              {isEditing ? "Edit Product" : "Add New Product"}
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Image Upload */}
               <div>
-                <label className="block text-sm font-medium text-gray-700">Product Image</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Product Image
+                </label>
                 <input
                   type="file"
                   accept="image/*"
@@ -299,14 +301,16 @@ const AdminProductsPage: React.FC = () => {
                   <img
                     src={imagePreview}
                     alt="Preview"
-                    className="mt-3 w-full h-64 object-cover rounded-md border"
+                    className="mt-3 w-full h-64 object-contain rounded-md border"
                   />
                 )}
               </div>
               {/* Product Details */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Name
+                  </label>
                   <input
                     type="text"
                     name="name"
@@ -318,7 +322,9 @@ const AdminProductsPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Price</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Price
+                  </label>
                   <input
                     type="text"
                     name="price"
@@ -330,7 +336,9 @@ const AdminProductsPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Description
+                  </label>
                   <textarea
                     name="description"
                     placeholder="Product Description"
@@ -340,7 +348,9 @@ const AdminProductsPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Discount Percentage</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Discount Percentage
+                  </label>
                   <input
                     type="number"
                     name="discountPercentage"
@@ -360,10 +370,14 @@ const AdminProductsPage: React.FC = () => {
                     onChange={handleFormChange}
                     className="h-4 w-4 text-blue-600 border-gray-300 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-700">Featured Product</label>
+                  <label className="ml-2 block text-sm text-gray-700">
+                    Featured Product
+                  </label>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Stock Level</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Stock Level
+                  </label>
                   <input
                     type="number"
                     name="stockLevel"
@@ -376,7 +390,9 @@ const AdminProductsPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Category</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Category
+                  </label>
                   <select
                     name="category"
                     value={formState.category || "Chair"}
@@ -395,141 +411,11 @@ const AdminProductsPage: React.FC = () => {
                 type="submit"
                 className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition"
               >
-                Create
+                {isEditing ? "Update" : "Create"}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowAddForm(false);
-                  setImagePreview("");
-                }}
-                className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Edit Product Form */}
-        {editingProduct && (
-          <form
-            onSubmit={handleUpdate}
-            className="mb-8 bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Product Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                {imagePreview && (
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="mt-3 w-full h-64 object-cover rounded-md border"
-                  />
-                )}
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder="Product Name"
-                    value={formState.name || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Price</label>
-                  <input
-                    type="text"
-                    name="price"
-                    placeholder="Product Price"
-                    value={formState.price || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <textarea
-                    name="description"
-                    placeholder="Product Description"
-                    value={formState.description || ""}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Discount Percentage</label>
-                  <input
-                    type="number"
-                    name="discountPercentage"
-                    placeholder="Discount Percentage"
-                    value={formState.discountPercentage || 0}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isFeaturedProduct"
-                    checked={formState.isFeaturedProduct || false}
-                    onChange={handleFormChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 block text-sm text-gray-700">Featured Product</label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Stock Level</label>
-                  <input
-                    type="number"
-                    name="stockLevel"
-                    placeholder="Stock Level"
-                    value={formState.stockLevel || 0}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Category</label>
-                  <select
-                    name="category"
-                    value={formState.category || "Chair"}
-                    onChange={handleFormChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                    required
-                  >
-                    <option value="Chair">Chair</option>
-                    <option value="Sofa">Sofa</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-4 mt-6">
-              <button
-                type="submit"
-                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelEdit}
+                onClick={handleCancel}
                 className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition"
               >
                 Cancel
@@ -552,11 +438,13 @@ const AdminProductsPage: React.FC = () => {
                 <img
                   src={product.image?.asset?.url || "/placeholder.png"}
                   alt={product.name}
-                  className="w-full h-64 object-cover rounded-md mb-4"
+                  className="w-full h-64 object-contain rounded-md mb-4"
                 />
-                <h2 className="text-xl font-bold text-blue-700">{product.name}</h2>
-                <p className="text-gray-700">Price: {product.price}</p>
-                <p className="text-gray-700">Category: {product.category}</p>
+                <h2 className="text-xl font-bold text-blue-700 mb-2">
+                  {product.name}
+                </h2>
+                <p className="text-gray-700 mb-1">Price: {product.price}</p>
+                <p className="text-gray-700 mb-1">Category: {product.category}</p>
                 <p className="text-gray-700">Stock: {product.stockLevel}</p>
                 <div className="flex space-x-2 mt-4">
                   <button

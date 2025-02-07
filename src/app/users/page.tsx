@@ -124,17 +124,17 @@ const AdminUsersPage: React.FC = () => {
   const handleEditClick = (user: User) => {
     setEditingUser(user);
     setFormState(user);
-    setShowAddForm(false);
+    setShowAddForm(true); // Make sure to show the form when editing
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleCancelEdit = () => {
     setEditingUser(null);
     setFormState({});
+    setShowAddForm(false); // Hide the form on cancel
   };
 
-  // If you see a warning about handleUpdate not being used, you can disable it:
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // Update an existing user.
   const handleUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (editingUser && editingUser._id) {
@@ -148,6 +148,7 @@ const AdminUsersPage: React.FC = () => {
         );
         setEditingUser(null);
         setFormState({});
+        setShowAddForm(false);
       } catch (err) {
         console.error(err);
         alert("Failed to update user");
@@ -176,7 +177,6 @@ const AdminUsersPage: React.FC = () => {
     try {
       // Remove _id from formState using a renaming pattern.
       const { _id: _unused, ...userData } = formState;
-      console.log(_unused)
       const newUserData: NewUserDocument = {
         _type: "user",
         name: userData.name!,
@@ -275,14 +275,14 @@ const AdminUsersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Add New User Form */}
-        {showAddForm && !editingUser && (
+        {/* Add / Edit User Form */}
+        {showAddForm && (
           <form
-            onSubmit={handleAddNew}
+            onSubmit={editingUser ? handleUpdate : handleAddNew}
             className="mb-8 bg-white p-6 rounded-xl shadow-lg border border-gray-200 transition hover:shadow-2xl"
           >
             <h2 className="text-2xl font-bold text-blue-600 mb-6">
-              Add New User
+              {editingUser ? "Edit User" : "Add New User"}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left Column – Basic Information */}
@@ -364,7 +364,8 @@ const AdminUsersPage: React.FC = () => {
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >
-                          <path d="M2.94 10a8.94 8.94 0 011.18-3.592l1.54 1.54A7.44 7.44 0 003.5 10a7.44 7.44 0 001.12 3.053l-1.54 1.54A8.94 8.94 0 012.94 10zM10 15a3.5 3.5 0 003.376-2.586l1.17 1.17A5 5 0 0110 17a5 5 0 01-4.546-2.916l1.17-1.17A3.5 3.5 0 0010 15z" />
+                          <path d="M2.94 10a8.94 8.94 0 011.18-3.592l1.54 1.54A7.44 7.44 0 003.5 10a7.44 7.44 0 001.12 3.053l-1.54 1.54A8.94 8.94 0 012.94 10z" />
+                          <path d="M10 15a3.5 3.5 0 003.376-2.586l1.17 1.17A5 5 0 0110 17a5 5 0 01-4.546-2.916l1.17-1.17A3.5 3.5 0 0010 15z" />
                           <path d="M10 5a5 5 0 014.546 2.916l-1.17 1.17A3.5 3.5 0 0010 6.5a3.5 3.5 0 00-3.376 2.586l-1.17-1.17A5 5 0 0110 5z" />
                         </svg>
                       )}
@@ -478,7 +479,7 @@ const AdminUsersPage: React.FC = () => {
                 type="submit"
                 className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition"
               >
-                Save
+                {editingUser ? "Update" : "Save"}
               </button>
               <button
                 type="button"
