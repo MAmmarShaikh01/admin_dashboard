@@ -3,7 +3,7 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { client } from "@/sanity/lib/client";
 
-// Updated Order interface reflecting the new schema.
+// Updated Order interface: cartItems is now an array of string product IDs.
 export interface Order {
   _id: string;
   fullName: string;
@@ -18,14 +18,11 @@ export interface Order {
   amount: number;
   createdAt: string;
   status: string; // "pending" or "completed"
-  cartItems: {
-    _id: string;
-    name: string;
-    imageUrl: string;
-  }[];
+  cartItems: string[]; // array of product IDs
 }
 
-// For form inputs we use a simplified type. (For simplicity, cartItems are a comma‑separated string of product IDs.)
+// For form inputs we use a simplified type.
+// For cartItems we use a comma‑separated string of product IDs.
 export type OrderInput = {
   _id?: string;
   fullName?: string;
@@ -43,14 +40,23 @@ export type OrderInput = {
   cartItems?: string; // comma separated product IDs
 };
 
+// We'll also maintain a lookup map for products.
+interface ProductDetails {
+  _id: string;
+  name: string;
+  imageUrl: string;
+}
+
 const AdminOrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [productsMap, setProductsMap] = useState<Record<string, ProductDetails>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
   const [formState, setFormState] = useState<OrderInput>({});
 
-  // Fetch orders from Sanity including resolved product data for cartItems.
+  // Fetch orders from Sanity.
+  // Note: Here we fetch cartItems as an array of strings.
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -69,14 +75,34 @@ const AdminOrdersPage: React.FC = () => {
           amount,
           createdAt,
           status,
-          cartItems[]->{
-            _id,
-            name,
-            "imageUrl": image.asset->url
-          }
+          cartItems
         }
       `);
       setOrders(data);
+
+      // Extract unique product IDs from all orders, trimming each ID.
+      const uniqueIds = Array.from(
+        new Set(data.flatMap((order) => (order.cartItems || []).map((id) => id.trim())))
+      );
+      if (uniqueIds.length > 0) {
+        // Fetch product details for these IDs.
+        const productsData: ProductDetails[] = await client.fetch(
+          `*[_type=="product" && _id in $ids]{
+            _id,
+            name,
+            "imageUrl": image.asset->url
+          }`,
+          { ids: uniqueIds }
+        );
+        // Build a lookup map.
+        const map: Record<string, ProductDetails> = {};
+        productsData.forEach((prod) => {
+          map[prod._id] = prod;
+        });
+        setProductsMap(map);
+      } else {
+        setProductsMap({});
+      }
     } catch (err) {
       console.error(err);
     }
@@ -102,7 +128,7 @@ const AdminOrdersPage: React.FC = () => {
     }
   };
 
-  // (Optional) Delete an order from the system.
+  // Delete an order.
   const handleDelete = async (orderId: string) => {
     if (confirm("Are you sure you want to delete this order?")) {
       try {
@@ -132,7 +158,7 @@ const AdminOrdersPage: React.FC = () => {
       amount: order.amount,
       createdAt: order.createdAt,
       status: order.status,
-      cartItems: order.cartItems.map((item) => item._id).join(", "),
+      cartItems: (order.cartItems || []).join(", "),
     });
     setShowAddForm(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -158,7 +184,6 @@ const AdminOrdersPage: React.FC = () => {
           ...formState,
           cartItems: cartItemsArray,
         };
-        // Cast the result of commit() to Order.
         const updated = (await client
           .patch(editingOrder._id)
           .set(updateData)
@@ -176,34 +201,26 @@ const AdminOrdersPage: React.FC = () => {
       }
     }
   };
-  
 
   // Create a new order.
   const handleAddNew = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      // Convert the cartItems string into an array of product reference objects.
+      // Convert the cartItems string into an array of product IDs.
       const cartItemsArray = formState.cartItems
         ? formState.cartItems.split(",").map((id) => id.trim())
         : [];
-      const references = cartItemsArray.map((id) => ({
-        _type: "reference",
-        _ref: id,
-      }));
-      
-      // Use current time if createdAt is not provided.
       const createdAt = formState.createdAt || new Date().toISOString();
       
-      // Create the new order with the proper cartItems array.
+      // Create the new order.
       await client.create({
         _type: "order",
         ...formState,
         status: "pending", // New orders default to pending.
-        cartItems: references,
+        cartItems: cartItemsArray,
         createdAt,
       });
-      
-      // Refresh the orders list so that the newly created order shows the resolved product details.
+      // Refresh orders (and the products lookup) after creation.
       await fetchOrders();
       handleCancel();
     } catch (err) {
@@ -211,8 +228,6 @@ const AdminOrdersPage: React.FC = () => {
       alert("Failed to create order");
     }
   };
-  
-  
 
   // Handle form input changes.
   const handleFormChange = (
@@ -525,26 +540,31 @@ const AdminOrdersPage: React.FC = () => {
                           Cart Items
                         </h4>
                         <div className="space-y-2">
-                          {order.cartItems?.map((item) => (
-                            <div
-                              key={item._id}
-                              className="flex items-center space-x-2"
-                            >
-                              <img
-                                src={item.imageUrl || "/placeholder.png"}
-                                alt={item.name}
-                                className="w-16 h-16 object-contain rounded-md border"
-                              />
-                              <div>
-                                <p className="text-gray-800 font-medium">
-                                  {item.name}
-                                </p>
-                                <p className="text-gray-600 text-sm">
-                                  ID: {item._id}
-                                </p>
+                          {(order.cartItems || []).map((prodId) => {
+                            const id = prodId.trim();
+                            const product = productsMap[id];
+                            if (!product) return null;
+                            return (
+                              <div
+                                key={id}
+                                className="flex items-center space-x-2"
+                              >
+                                <img
+                                  src={product.imageUrl || "/placeholder.png"}
+                                  alt={product.name}
+                                  className="w-16 h-16 object-contain rounded-md border"
+                                />
+                                <div>
+                                  <p className="text-gray-800 font-medium">
+                                    {product.name}
+                                  </p>
+                                  <p className="text-gray-600 text-sm">
+                                    ID: {id}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                       <button
@@ -552,7 +572,7 @@ const AdminOrdersPage: React.FC = () => {
                           e.stopPropagation();
                           handleComplete(order._id);
                         }}
-                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
+                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition w-full"
                       >
                         Complete
                       </button>
@@ -594,32 +614,46 @@ const AdminOrdersPage: React.FC = () => {
                           Cart Items
                         </h4>
                         <div className="space-y-2">
-                          {order.cartItems?.map((item) => (
-                            <div
-                              key={item._id}
-                              className="flex items-center space-x-2"
-                            >
-                              <img
-                                src={item.imageUrl || "/placeholder.png"}
-                                alt={item.name}
-                                className="w-16 h-16 object-contain rounded-md border"
-                              />
-                              <div>
-                                <p className="text-gray-800 font-medium">
-                                  {item.name}
-                                </p>
-                                <p className="text-gray-600 text-sm">
-                                  ID: {item._id}
-                                </p>
+                          {(order.cartItems || []).map((prodId) => {
+                            const id = prodId.trim();
+                            const product = productsMap[id];
+                            if (!product) return null;
+                            return (
+                              <div
+                                key={id}
+                                className="flex items-center space-x-2"
+                              >
+                                <img
+                                  src={product.imageUrl || "/placeholder.png"}
+                                  alt={product.name}
+                                  className="w-16 h-16 object-contain rounded-md border"
+                                />
+                                <div>
+                                  <p className="text-gray-800 font-medium">
+                                    {product.name}
+                                  </p>
+                                  <p className="text-gray-600 text-sm">
+                                    ID: {id}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
-                      <div className="flex items-center justify-center">
+                      <div className="flex items-center justify-between">
                         <span className="text-green-700 font-bold">
                           Completed
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(order._id);
+                          }}
+                          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))}
