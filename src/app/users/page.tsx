@@ -39,10 +39,8 @@ export type UserInput = {
   role?: string;
 };
 
-// When creating a new document, _id is not provided. We define a type for that.
-export type NewUserDocument = Omit<User, "_id"> & {
-  _type: "user";
-};
+// When creating a new document, _id is not provided.
+export type NewUserDocument = Omit<User, "_id"> & { _type: "user" };
 
 // Interface for the GROQ query response from Sanity.
 interface SanityUser {
@@ -135,7 +133,8 @@ const AdminUsersPage: React.FC = () => {
     setFormState({});
   };
 
-  // Update a user.
+  // If you see a warning about handleUpdate not being used, you can disable it:
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (editingUser && editingUser._id) {
@@ -175,8 +174,8 @@ const AdminUsersPage: React.FC = () => {
       return;
     }
     try {
-      // Remove _id from formState using the pattern _id: _ to ignore it.
-      const { _id: _, ...userData } = formState;
+      // Remove _id from formState using a renaming pattern.
+      const { _id: _unused, ...userData } = formState;
       const newUserData: NewUserDocument = {
         _type: "user",
         name: userData.name!,
@@ -204,15 +203,12 @@ const AdminUsersPage: React.FC = () => {
   };
 
   // Handle changes for form inputs.
-  // For address fields, use names like "address.street", "address.city", etc.
   const handleFormChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
     const checked =
-      e.target instanceof HTMLInputElement && type === "checkbox"
-        ? e.target.checked
-        : undefined;
+      e.target instanceof HTMLInputElement && type === "checkbox" ? e.target.checked : undefined;
     if (name.startsWith("address.")) {
       const field = name.split(".")[1];
       setFormState((prev) => ({
