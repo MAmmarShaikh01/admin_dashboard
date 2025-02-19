@@ -83,8 +83,8 @@ const AdminMessagesPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 py-8">
       {/* Full Message Modal */}
       {selectedMessage && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
-          <div className="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full mx-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 overflow-auto">
+          <div className="bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full mx-4 my-8 max-h-[90vh] overflow-y-auto">
             <div className="mb-4">
               <h2 className="text-2xl font-bold text-blue-700">{selectedMessage.name}</h2>
               <p className="text-gray-700 text-sm">
